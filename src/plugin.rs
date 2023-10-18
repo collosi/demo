@@ -1,4 +1,5 @@
 use anyhow::{Context, Result};
+use std::ffi::CStr;
 use std::path::Path;
 use wasmtime::*;
 
@@ -34,18 +35,24 @@ where
     // // implementation of that function here, and the `caller` parameter here is
     // // used to get access to our original `MyState` value.
     // println!("Creating callback...");
-    // let hello_func = Func::wrap(&mut store, |mut caller: Caller<'_, MyState>| {
-    //     println!("Calling back...");
-    //     println!("> {}", caller.data().name);
-    //     caller.data_mut().count += 1;
-    // });
+    let output_func = Func::wrap(
+        &mut store,
+        |mut caller: Caller<'_, StoreState>, str: i32| {
+            if let Some(Extern::Memory(mem)) = caller.get_export("memory") {
+                let cstr =
+                    CStr::from_bytes_until_nul(&mem.data(caller.as_context())[str as usize..])
+                        .unwrap_or_default();
+                let rstr = String::from_utf8_lossy(cstr.to_bytes()).to_string();
+                println!("{rstr}");
+            }
+        },
+    );
 
     // Once we've got that all set up we can then move to the instantiation
     // phase, pairing together a compiled module as well as a set of imports.
     // Note that this is where the wasm `start` function, if any, would run.
     // println!("Instantiating module...");
-    // let imports = [hello_func.into()];
-    let imports = [];
+    let imports = [output_func.into()];
     let instance = Instance::new(&mut store, &module, &imports)?;
     Ok(DemoRunner { instance, store })
 }
