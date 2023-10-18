@@ -96,22 +96,17 @@ impl DemoRunner {
         size: &Rect,
         handle_data: impl Fn(&[u8]) -> anyhow::Result<()>,
     ) -> anyhow::Result<()> {
-        println!("got here 1");
         let run = self
             .instance
             .get_typed_func::<(i32, i32, i32), i32>(&mut self.store, "render")?;
-        println!("got here 11");
 
         let ptr = run.call(&mut self.store, (time, size.width, size.height))? as usize;
-        println!("got here 111");
         let len = size.width as usize * size.height as usize * 4;
-        println!("got here 1111");
 
         let memory = self
             .instance
             .get_memory(&mut self.store, "memory")
             .context("no memory")?;
-        println!("got here 11111");
         handle_data(&memory.data(&mut self.store)[ptr..(ptr + len)])
     }
 }
