@@ -23,7 +23,7 @@ fn do_main() -> anyhow::Result<()> {
     unsafe {
         CoInitializeEx(None, COINIT_MULTITHREADED)?;
     }
-    let runner = plugin::create_file("./satori/target/wasm32-unknown-unknown/debug/satori.wasm")?;
+    let runner = plugin::create_file("./sdf/target/wasm32-unknown-unknown/debug/sdf.wasm")?;
     let mut window = Window::new(runner)?;
 
     Ok(window.run()?)
@@ -170,7 +170,7 @@ impl Window {
                 },
                 |data: &[u8]| {
                     let data_ptr: *const u8 = data.as_ptr();
-                    clock.CopyFromMemory(None, data_ptr as *const c_void, px_size.width)?;
+                    clock.CopyFromMemory(None, data_ptr as *const c_void, px_size.width*4)?;
                     Ok(())
                 },
             )?;
@@ -452,9 +452,9 @@ fn create_transition() -> anyhow::Result<IUIAnimationTransition> {
 fn create_device_with_type(drive_type: D3D_DRIVER_TYPE) -> Result<ID3D11Device> {
     let mut flags = D3D11_CREATE_DEVICE_BGRA_SUPPORT;
 
-    if cfg!(debug_assertions) {
-        flags |= D3D11_CREATE_DEVICE_DEBUG;
-    }
+    // if cfg!(debug_assertions) {
+    //     flags |= D3D11_CREATE_DEVICE_DEBUG;
+    // }
 
     let mut device = None;
 
@@ -478,8 +478,11 @@ fn create_device() -> Result<ID3D11Device> {
     let mut result = create_device_with_type(D3D_DRIVER_TYPE_HARDWARE);
 
     if let Err(err) = &result {
-        if err.code() == DXGI_ERROR_UNSUPPORTED {
-            result = create_device_with_type(D3D_DRIVER_TYPE_WARP);
+        match err.code() {
+            DXGI_ERROR_UNSUPPORTED | DXGI_ERROR_SDK_COMPONENT_MISSING => {
+                result = create_device_with_type(D3D_DRIVER_TYPE_WARP);
+            }
+            _ => {}
         }
     }
 
