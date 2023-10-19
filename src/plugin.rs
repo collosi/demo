@@ -53,6 +53,7 @@ where
     // Note that this is where the wasm `start` function, if any, would run.
     // println!("Instantiating module...");
     let imports = [output_func.into()];
+    // let imports=[];
     let instance = Instance::new(&mut store, &module, &imports)?;
     Ok(DemoRunner { instance, store })
 }
