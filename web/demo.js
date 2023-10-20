@@ -41,7 +41,7 @@ class FrameRateCounter extends HTMLElement {
     }
     avg /= this._samples.length;
     //console.log(avg, this._samples.length);
-    this._frame_rate_element.innerText = Math.round(1/(avg / 1000));
+    this._frame_rate_element.innerText = (1/(avg / 1000)).toFixed(1);
   }
 }
 
@@ -53,48 +53,84 @@ class Demo extends HTMLElement {
       mode: 'closed'
     });
     shadowRoot.innerHTML = `
-   		<canvas></canvas>
+   		<canvas style="aspect-ratio:640/480;width:100%;"></canvas>
     `;
     this._canvas = shadowRoot.querySelector('canvas');
-
+    this._ctx = this._canvas.getContext('2d');
   }
 
-  get wasm() {
-    return this._value;
+  get frameCallback() {
+    return this._frameCallback;
   }
 
-  set wasm(v) {
-    this._wasm = v;
+  set frameCallback(f) {
+    this._frameCallback = f;
   }
 
-  start() {
-    this._running = true;
-    requestAnimationFrame((ts) => this.animate(ts));
+  #getImageData() {
+    const { width, height } = this._canvas.getBoundingClientRect();
+    const iwidth = Math.trunc(width);
+    const iheight = Math.trunc(height);
+    if (!this._imageData || iwidth != this._imageData.width || iheight != this._imageData.height) {
+      console.log(`new imageData ${iwidth} ${iheight}`);
+      this._imageData = this._ctx.getImageData(0, 0, iwidth, iheight)
+    }
+  }
+  
+  async start() {
+    this.#getImageData();
+    if (this.hasAttribute("src") && this.getAttribute("src")) {
+      var path = this.getAttribute("src");
+      const importObject = {
+        env: {output: (ptr) => {
+          const str = new Uint8ClampedArray(this._wasm.exports.memory.buffer, ptr, 1024);
+          var s = "";
+          for (var i = 0; i < str.length; i++) {
+            if (str[i] == 0) {
+              break;
+            }
+            s += String.fromCharCode(str[i]);
+          }
+          console.log(s)
+        }
+      },
+      };
+        
+      const response = await fetch(path);
+      const wasmBuffer = await response.arrayBuffer();
+      const wasmObj = await WebAssembly.instantiate(wasmBuffer, importObject);
+        this._wasm = wasmObj.instance;
+      
+      const { width, height } = this._canvas.getBoundingClientRect();
+      const xxx = this._wasm.exports.set_dimensions(32, width, height, width, height, width, height);
+      if (width != chosen_width || height != chosen_height) {
+         consoe.log("oops");       
+      } else {
+        this._wasm = null;
+      }
+    }
+    if (this._wasm) {
+      this._running = true;
+      requestAnimationFrame((ts) => this.animate(ts));
+    }
   }
 
   stop() {
     this._running = false;
-
   }
 
   animate(timestamp) {
-    const canvas = this._canvas;
-    const ctx = canvas.getContext('2d');
+    if (this._ctx) {
+      this.#getImageData();
+      const data = this._imageData.data;
 
-    if (ctx) {
-      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-      const data = imageData.data;
-
-      for (let i = 0; i < data.length; i += 4) {
-        const noise = Math.random() * 255;
-        data[i] = noise; // Red
-        data[i + 1] = noise; // Green
-        data[i + 2] = noise; // Blue
-        data[i + 3] = 255; // Alpha (fully opaque)
-      }
-
-      ctx.putImageData(imageData, 0, 0);
+      console.log(`rendering(${this._imageData.width}, ${this._imageData.height})`);
+      const pointer = this._wasm.exports.render(timestamp, this._imageData.width, this._imageData.height);
+      const rendered = new Uint8ClampedArray(this._wasm.exports.memory.buffer, pointer, data.length);
+      data.set(rendered);
+      this._ctx.putImageData(this._imageData, 0, 0);
     }
+    this._frameCallback(timestamp);
     if (this._running) {
       requestAnimationFrame((ts) => {
         this.animate(ts);
