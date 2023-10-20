@@ -23,7 +23,7 @@ fn do_main() -> anyhow::Result<()> {
     unsafe {
         CoInitializeEx(None, COINIT_MULTITHREADED)?;
     }
-    let runner = plugin::create_file("./sdf/target/wasm32-unknown-unknown/debug/sdf.wasm")?;
+    let runner = plugin::create_file("./sdf/target/wasm32-unknown-unknown/release/sdf.wasm")?;
     let mut window = Window::new(runner)?;
 
     Ok(window.run()?)
@@ -33,7 +33,6 @@ struct Window {
     handle: HWND,
     factory: ID2D1Factory1,
     dxfactory: IDXGIFactory2,
-    style: ID2D1StrokeStyle,
     manager: IUIAnimationManager,
     variable: IUIAnimationVariable,
 
@@ -53,7 +52,6 @@ impl Window {
     fn new(demo_runner: DemoRunner) -> anyhow::Result<Self> {
         let factory = create_factory()?;
         let dxfactory: IDXGIFactory2 = unsafe { CreateDXGIFactory1()? };
-        let style = create_style(&factory)?;
         let manager: IUIAnimationManager =
             unsafe { CoCreateInstance(&UIAnimationManager, None, CLSCTX_ALL)? };
         let transition = create_transition()?;
@@ -77,7 +75,6 @@ impl Window {
             handle: HWND(0),
             factory,
             dxfactory,
-            style,
             manager,
             variable,
             target: None,
@@ -163,14 +160,14 @@ impl Window {
 
             let px_size = clock.GetPixelSize();
             self.demo_runner.call_render(
-                1,
+                now,
                 &plugin::Rect {
                     width: px_size.width as i32,
                     height: px_size.height as i32,
                 },
                 |data: &[u8]| {
                     let data_ptr: *const u8 = data.as_ptr();
-                    clock.CopyFromMemory(None, data_ptr as *const c_void, px_size.width*4)?;
+                    clock.CopyFromMemory(None, data_ptr as *const c_void, px_size.width * 4)?;
                     Ok(())
                 },
             )?;
@@ -429,16 +426,6 @@ fn create_factory() -> anyhow::Result<ID2D1Factory1> {
             Some(&options),
         )?)
     }
-}
-
-fn create_style(factory: &ID2D1Factory1) -> anyhow::Result<ID2D1StrokeStyle> {
-    let props = D2D1_STROKE_STYLE_PROPERTIES {
-        startCap: D2D1_CAP_STYLE_ROUND,
-        endCap: D2D1_CAP_STYLE_TRIANGLE,
-        ..Default::default()
-    };
-
-    unsafe { Ok(factory.CreateStrokeStyle(&props, None)?) }
 }
 
 fn create_transition() -> anyhow::Result<IUIAnimationTransition> {
