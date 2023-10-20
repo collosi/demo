@@ -100,13 +100,13 @@ impl DemoRunner {
 
     pub fn call_render(
         &mut self,
-        time: i32,
+        time: f64,
         size: &Rect,
         handle_data: impl Fn(&[u8]) -> anyhow::Result<()>,
     ) -> anyhow::Result<()> {
         let run = self
             .instance
-            .get_typed_func::<(i32, i32, i32), i32>(&mut self.store, "render")?;
+            .get_typed_func::<(f64, i32, i32), i32>(&mut self.store, "render")?;
 
         let ptr = run.call(&mut self.store, (time, size.width, size.height))? as usize;
         let len = size.width as usize * size.height as usize * 4;
