@@ -1,7 +1,33 @@
 <html>
+<head>
+<style>
+div.center-box {
+  width:100%;
+  height:100%;
+  display: flex;
+  flex-direction: row; 
+  align-items: center; 
+  justify-content: center;
+}
+demo-viewer {
+  aspect-ratio: 640/480;
+  width: 50%;
+  height: 50%;
+}
+</style>
 <body>  
-<demo-viewer id="speed"></demo-viewer>
+<div class="center-box">
+<demo-viewer id="demo" src="sdf.wasm"></demo-viewer>
 <frame-rate-counter id="framerate"></frame-rate-counter>
+</div>
 </body>
   <script src="demo.js"></script>
+  <script type="module">
+  const counter = document.getElementById("framerate");
+  const demo = document.getElementById("demo");
+  demo.frameCallback = (ts) => {
+    counter.stamp(ts);  
+  };
+  await demo.start();
+  </script>
 </html>
