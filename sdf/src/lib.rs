@@ -24,6 +24,16 @@ macro_rules! outputln {
             }};
     }
 
+const DIMENSIONS :[[i32;2];3] = [[320, 240],[640,480],[0,0]];
+
+#[allow(unused_variables)]
+#[no_mangle]
+fn get_dimensions(dpi: i32) -> i32{
+    unsafe {
+        DIMENSIONS.as_ptr() as i32
+    }
+}
+
 #[allow(unused_variables)]
 #[no_mangle]
 fn set_dimensions(
@@ -96,10 +106,42 @@ fn ray_direction(field_of_view: f32, width: f32, height: f32, x: f32, y: f32) ->
     Vec3::new(x - width / 2.0, y - height / 2.0, z).normalize()
 }
 
+fn hsv_to_rgb(h: u8, s: u8, v: u8) -> (u8, u8, u8) {
+    let h = h as f32 / 255.0 * 360.0; // Convert hue to [0, 360]
+    let s = s as f32 / 255.0; // Convert saturation to [0, 1]
+    let v = v as f32 / 255.0; // Convert value to [0, 1]
+
+    let c = v * s;
+    let x = c * (1.0 - ((h / 60.0) % 2.0 - 1.0).abs());
+    let m = v - c;
+
+    let (r_prime, g_prime, b_prime) = 
+        if h < 60.0 {
+            (c, x, 0.0)
+        } else if h < 120.0 {
+            (x, c, 0.0)
+        } else if h < 180.0 {
+            (0.0, c, x)
+        } else if h < 240.0 {
+            (0.0, x, c)
+        } else if h < 300.0 {
+            (x, 0.0, c)
+        } else {
+            (c, 0.0, x)
+        };
+
+    let r = ((r_prime + m) * 255.0).round() as u8;
+    let g = ((g_prime + m) * 255.0).round() as u8;
+    let b = ((b_prime + m) * 255.0).round() as u8;
+
+    (r, g, b)
+}
+
 #[allow(unused_variables)]
 #[no_mangle]
 pub fn render(time: f64, width: i32, height: i32) -> i32 {
-    let rotation = Mat4::rotation(time as f32, 0.0, 0.0);
+    let t = time / 5000.0;
+    let rotation = Mat4::rotation(t as f32, t as f32 / 2.0, t as f32 / 3.0);
     let eye: Vec3 = (0.0, 0.0, -5.0).into();
     let df = |v| {
         let mv = rotation * v;
@@ -116,7 +158,8 @@ pub fn render(time: f64, width: i32, height: i32) -> i32 {
                 let p = eye + (dir * dist);
                 let normal = gradient(df, p);
                 let intensity = ((-dir.dot(normal)).max(0.0) * 255.0) as u8;
-                set_px(i, j, width as usize, intensity, 0, 0, 255);
+                let (r, g, b) = hsv_to_rgb((t*10.0 % 255.0) as u8, intensity, 100  );
+                set_px(i, j, width as usize, r,g,b,255);
             }
         }
     }
@@ -148,7 +191,7 @@ fn sdf_cube_minus_sphere(v: Vec3) -> f32 {
 }
 
 fn gradient(df: impl Fn(Vec3) -> f32, v: Vec3) -> Vec3 {
-    const EPS: f32 = 0.1;
+    const EPS: f32 = 0.001;
     let dx = df((v.x + EPS, v.y, v.z).into()) - df((v.x - EPS, v.y, v.z).into());
     let dy = df((v.x, v.y + EPS, v.z).into()) - df((v.x, v.y - EPS, v.z).into());
     let dz = df((v.x, v.y, v.z + EPS).into()) - df((v.x, v.y, v.z - EPS).into());
