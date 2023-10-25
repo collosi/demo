@@ -319,6 +319,15 @@ impl Mul<Vec3> for Mat4 {
 
 #[allow(dead_code)]
 impl Mat4 {
+    pub fn translation(dx: f32, dy: f32, dz: f32) -> Mat4 {
+        Mat4([
+            [1.0, 0.0, 0.0, dx],
+            [0.0, 1.0, 0.0, dy],
+            [0.0, 0.0, 1.0, dz],
+            [0.0, 0.0, 0.0, 1.0],
+        ])
+    }
+    
     pub fn rotation(roll: f32, pitch: f32, yaw: f32) -> Mat4 {
         // Rotation around the x-axis (roll)
         let rx = Mat4([
