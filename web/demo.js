@@ -45,6 +45,7 @@ class FrameRateCounter extends HTMLElement {
   }
 }
 
+
 class Demo extends HTMLElement {
   constructor() {
     super();
@@ -67,18 +68,25 @@ class Demo extends HTMLElement {
     this._frameCallback = f;
   }
 
-  #getImageData() {
-    const { width, height } = this._canvas.getBoundingClientRect();
-    const iwidth = Math.trunc(width);
-    const iheight = Math.trunc(height);
-    if (!this._imageData || iwidth != this._imageData.width || iheight != this._imageData.height) {
-      console.log(`new imageData ${iwidth} ${iheight}`);
-      this._imageData = this._ctx.getImageData(0, 0, iwidth, iheight)
+  #getImageData(width, height) {
+    if (this._imageData) {
+      if (width > 0 && height > 0 && (width != this._imageData.width || height != this._imageData.height)) {
+        console.log(`new imageData ${width} ${height}`);
+        this._imageData = this._ctx.getImageData(0, 0, width, height)
+      }
+    } else {
+      console.log(`new imageData ${width} ${height}`);
+      this._imageData = this._ctx.getImageData(0, 0, width, height)
     }
   }
-  
+
+  #getDimensions(dpi) {
+    const ptr = this._wasm.exports.get_dimensions(dpi);
+    const dimensions = new Uint32Array(this._wasm.exports.memory.buffer, ptr, 1024);
+    return {allowed_width:dimensions[0], allowed_height:dimensions[1]};
+  }
+
   async start() {
-    this.#getImageData();
     if (this.hasAttribute("src") && this.getAttribute("src")) {
       var path = this.getAttribute("src");
       const importObject = {
@@ -99,15 +107,14 @@ class Demo extends HTMLElement {
       const response = await fetch(path);
       const wasmBuffer = await response.arrayBuffer();
       const wasmObj = await WebAssembly.instantiate(wasmBuffer, importObject);
-        this._wasm = wasmObj.instance;
+      this._wasm = wasmObj.instance;
       
-      const { width, height } = this._canvas.getBoundingClientRect();
-      const xxx = this._wasm.exports.set_dimensions(32, width, height, width, height, width, height);
-      if (width != chosen_width || height != chosen_height) {
-         consoe.log("oops");       
-      } else {
-        this._wasm = null;
-      }
+      const dimension = this.#getDimensions(32);
+      const { allowed_width, allowed_height } = dimension;
+
+      this.#getImageData(allowed_width, allowed_height);
+      this._canvas.width = allowed_width;
+      this._canvas.height = allowed_height;
     }
     if (this._wasm) {
       this._running = true;
