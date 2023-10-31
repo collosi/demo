@@ -108,7 +108,7 @@ class Demo extends HTMLElement {
       const wasmBuffer = await response.arrayBuffer();
       const wasmObj = await WebAssembly.instantiate(wasmBuffer, importObject);
       this._wasm = wasmObj.instance;
-      
+
       const dimension = this.#getDimensions(32);
       const { allowed_width, allowed_height } = dimension;
 
@@ -133,7 +133,7 @@ class Demo extends HTMLElement {
 
       console.log(`rendering(${this._imageData.width}, ${this._imageData.height})`);
       const pointer = this._wasm.exports.render(timestamp, this._imageData.width, this._imageData.height);
-      const rendered = new Uint8ClampedArray(this._wasm.exports.memory.buffer, pointer, data.length);
+      const rendered = new Uint8Array(this._wasm.exports.memory.buffer, pointer, data.length);
       data.set(rendered);
       this._ctx.putImageData(this._imageData, 0, 0);
     }
