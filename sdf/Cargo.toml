@@ -9,4 +9,10 @@ edition = "2021"
 crate-type=["cdylib"]
 
 [dev-dependencies]
+rand = "0.8.5"
 libc = "0.2.149"
+nalgebra = "0.32.3"
+
+[profile.release]
+lto = true
+
