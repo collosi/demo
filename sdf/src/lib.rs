@@ -34,27 +34,6 @@ fn get_dimensions(dpi: i32) -> i32{
     }
 }
 
-#[allow(unused_variables)]
-#[no_mangle]
-fn set_dimensions(
-    dpi: i32,
-    min_width: i32,
-    min_height: i32,
-    preferred_width: i32,
-    preferred_height: i32,
-    max_width: i32,
-    max_height: i32,
-) -> (i32, i32) {
-    let (width, height) =
-        if preferred_width < STATIC_WIDTH as i32 && preferred_height < STATIC_HEIGHT as i32 {
-            (preferred_width, preferred_height)
-        } else {
-            (STATIC_WIDTH as i32, STATIC_HEIGHT as i32)
-        };
-    outputln!("selected {width} {height}");
-    (width, height)
-}
-
 const STATIC_WIDTH: usize = 1024;
 const STATIC_HEIGHT: usize = 768;
 static mut PIX_BUF: [[u8; 4]; STATIC_WIDTH * STATIC_HEIGHT] =
@@ -69,12 +48,12 @@ pub fn set_px(x: usize, y: usize, width: usize, r: u8, g: u8, b: u8, a: u8) {
 const EPSILON: f32 = 0.0001;
 const MAX_MARCHING_STEPS: usize = 255;
 const MIN_DIST: f32 = 0.0;
-const MAX_DIST: f32 = 100.0;
+const MAX_DIST: f32 = 10.0;
 
 fn shortest_distance_to_surface(
-    df: impl Fn(Vec3) -> f32,
-    eye: Vec3,
-    direction: Vec3,
+    df: impl Fn(Vec4) -> f32,
+    eye: Vec4,
+    direction: Vec4,
     start: f32,
     end: f32,
 ) -> f32 {
@@ -82,7 +61,7 @@ fn shortest_distance_to_surface(
     for _ in 0..MAX_MARCHING_STEPS {
         let view_ray = eye + (direction * depth);
         let dist = df(view_ray);
-        // outputln!("{depth} {view_ray:?} {dist}");
+        //  outputln!("============ {depth} {view_ray:?} {dist}");
         if dist < EPSILON {
             return depth;
         }
@@ -101,9 +80,9 @@ fn shortest_distance_to_surface(
  * size: resolution of the output image
  * fragCoord: the x,y coordinate of the pixel in the output image
  */
-fn ray_direction(field_of_view: f32, width: f32, height: f32, x: f32, y: f32) -> Vec3 {
+fn ray_direction(field_of_view: f32, width: f32, height: f32, x: f32, y: f32) -> Vec4 {
     let z = height / (field_of_view.to_radians() / 2.0).tan();
-    Vec3::new(x - width / 2.0, y - height / 2.0, z).normalize()
+    Vec4::new3(x - width / 2.0, y - height / 2.0, z).normalize()
 }
 
 fn hsv_to_rgb(h: u8, s: u8, v: u8) -> (u8, u8, u8) {
@@ -142,8 +121,9 @@ fn hsv_to_rgb(h: u8, s: u8, v: u8) -> (u8, u8, u8) {
 pub fn render(time: f64, width: i32, height: i32) -> i32 {
     let t = time / 5000.0;
     let rotation = Mat4::rotation(t as f32, t as f32 / 2.0, t as f32 / 3.0);
-    let eye: Vec3 = (0.0, 0.0, -5.0).into();
-    let df = |v| {
+    // let rotation = Mat4::identity();
+    let eye: Vec4 = (0.0, 0.0, -5.0).into();
+    let df = |v:Vec4| {
         let mv = rotation * v;
         sdf_cube_minus_sphere(mv)
     };
@@ -151,7 +131,7 @@ pub fn render(time: f64, width: i32, height: i32) -> i32 {
         for j in 0..height as usize {
             let dir = ray_direction(45.0, width as f32, height as f32, i as f32, j as f32);
             let dist = shortest_distance_to_surface(df, eye, dir, MIN_DIST, MAX_DIST);
-
+            // return unsafe { PIX_BUF.as_ptr() as i32 };
             if dist > MAX_DIST - EPSILON {
                 set_px(i, j, width as usize, 0, 0, 0, 255);
             } else {
@@ -170,32 +150,36 @@ pub fn render(time: f64, width: i32, height: i32) -> i32 {
 const CUBE_SIZE: f32 = 0.5;
 const SPHERE_RADIUS: f32 = 0.6;
 
-fn sdf_cube(v: Vec3) -> f32 {
-    let dx = v.x.abs() - CUBE_SIZE;
-    let dy = v.y.abs() - CUBE_SIZE;
-    let dz = v.z.abs() - CUBE_SIZE;
+fn sdf_cube(v: Vec4) -> f32 {
+    let (x,y,z,_) = v.extract();
+    let dx = x.abs() - CUBE_SIZE;
+    let dy = y.abs() - CUBE_SIZE;
+    let dz = z.abs() - CUBE_SIZE;
     let outside = dx.max(dy.max(dz));
     let inside = dx.min(0.0).max(dy.min(0.0).max(dz.min(0.0)));
+    // outputln!("{dx} {dy} {dz} {outside} {inside}");
     outside + inside
 }
 
-fn sdf_sphere(v: Vec3) -> f32 {
+fn sdf_sphere(v: Vec4) -> f32 {
     let len = v.dot(v).sqrt();
     len - SPHERE_RADIUS
 }
 
-fn sdf_cube_minus_sphere(v: Vec3) -> f32 {
+fn sdf_cube_minus_sphere(v: Vec4) -> f32 {
     let cube_sdf = sdf_cube(v);
     let sphere_sdf = sdf_sphere(v);
+    // outputln!("cube:{} sphere:{} choosing:{}", cube_sdf, sphere_sdf, cube_sdf.max(-sphere_sdf));
     cube_sdf.max(-sphere_sdf)
 }
 
-fn gradient(df: impl Fn(Vec3) -> f32, v: Vec3) -> Vec3 {
+fn gradient(df: impl Fn(Vec4) -> f32, v: Vec4) -> Vec4 {
+    let (x,y,z,_) = v.extract();
     const EPS: f32 = 0.001;
-    let dx = df((v.x + EPS, v.y, v.z).into()) - df((v.x - EPS, v.y, v.z).into());
-    let dy = df((v.x, v.y + EPS, v.z).into()) - df((v.x, v.y - EPS, v.z).into());
-    let dz = df((v.x, v.y, v.z + EPS).into()) - df((v.x, v.y, v.z - EPS).into());
-    Vec3::new(dx, dy, dz).normalize()
+    let dx = df((x + EPS, y, z).into()) - df((x - EPS, y, z).into());
+    let dy = df((x, y + EPS, z).into()) - df((x, y - EPS, z).into());
+    let dz = df((x, y, z + EPS).into()) - df((x, y, z - EPS).into());
+    Vec4::new3(dx, dy, dz).normalize()
 }
 
 #[cfg(test)]
